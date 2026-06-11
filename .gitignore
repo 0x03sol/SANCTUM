@@ -20,3 +20,13 @@ build/
 .vercel/
 
 # ---- foundry ----
+contracts/lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+.ritual-build/
+
+# ---- misc ----
+.DS_Store
+*.log
+coverage/
