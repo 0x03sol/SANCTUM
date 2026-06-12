@@ -8,3 +8,12 @@ solc = "0.8.28"
 evm_version = "shanghai"
 optimizer = true
 optimizer_runs = 200
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+]
+
+[rpc_endpoints]
+ritual = "${RITUAL_RPC_URL}"
+
+# Ritual Chain testnet
+# chain id 1979 | RPC https://rpc.ritualfoundation.org | ~350ms blocks
