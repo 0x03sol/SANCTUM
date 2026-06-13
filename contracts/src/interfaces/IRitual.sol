@@ -24,3 +24,29 @@ library RitualAddresses {
     address internal constant PERSISTENT_AGENT = address(0x0820);
     address internal constant SECP256R1 = address(0x0100);
 
+    // TEEServiceRegistry capability ids
+    uint8 internal constant CAP_HTTP_CALL = 0;
+    uint8 internal constant CAP_LLM = 1;
+}
+
+interface IRitualWallet {
+    function deposit(uint256 lockDuration) external payable;
+    function depositFor(address user, uint256 lockDuration) external payable;
+    function withdraw(uint256 amount) external;
+    function balanceOf(address account) external view returns (uint256);
+    function lockUntil(address account) external view returns (uint256);
+}
+
+interface IScheduler {
+    function schedule(
+        bytes memory data,
+        uint32 gas,
+        uint32 startBlock,
+        uint32 numCalls,
+        uint32 frequency,
+        uint32 ttl,
+        uint256 maxFeePerGas,
+        uint256 maxPriorityFeePerGas,
+        uint256 value,
+        address payer
+    ) external returns (uint256 callId);
