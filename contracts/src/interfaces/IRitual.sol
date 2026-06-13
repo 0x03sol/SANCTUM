@@ -50,3 +50,29 @@ interface IScheduler {
         uint256 value,
         address payer
     ) external returns (uint256 callId);
+
+    function cancel(uint256 callId) external;
+    function getCallState(uint256 callId) external view returns (uint8);
+    function approveScheduler(address schedulerContract) external;
+    function revokeScheduler(address schedulerContract) external;
+}
+
+interface IAsyncJobTracker {
+    function hasPendingJobForSender(address sender) external view returns (bool);
+    function isLongRunning(bytes32 jobId) external view returns (bool);
+    function isPhase1Settled(bytes32 jobId) external view returns (bool);
+}
+
+/// @notice Single-contract subset of ACE — declares function priority levels.
+/// Level 0 executes before level 1, etc. Used here for cancel-before-take priority.
+interface ISequencingRights {
+    function sequencingRights() external view returns (bytes4[][] memory);
+}
+
+/// @notice Predicate the Scheduler staticcalls before each execution (100k gas cap).
+interface IScheduledPredicate {
+    function shouldExecute(address caller, uint256 callId, uint256 executionIndex)
+        external
+        view
+        returns (bool);
+}
