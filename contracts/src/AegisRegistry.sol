@@ -74,3 +74,79 @@ contract AegisRegistry {
     // ---------------------------------------------------------------------
 
     modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyReporter() {
+        if (!isReporter[msg.sender]) revert NotReporter();
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+        emit OwnerTransferred(address(0), msg.sender);
+    }
+
+    // ---------------------------------------------------------------------
+    // Admin
+    // ---------------------------------------------------------------------
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnerTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    /// @notice Authorize (or revoke) a market contract to report reputation events.
+    function setReporter(address reporter, bool allowed) external onlyOwner {
+        if (reporter == address(0)) revert ZeroAddress();
+        isReporter[reporter] = allowed;
+        emit ReporterSet(reporter, allowed);
+    }
+
+    // ---------------------------------------------------------------------
+    // Registration
+    // ---------------------------------------------------------------------
+
+    /// @notice Register the caller as an agent with a role. Self-sovereign onboarding.
+    function register(Role role) external {
+        _register(msg.sender, role);
+    }
+
+    /// @notice Reporter/owner may register an agent on its behalf (e.g. a spawned child harness).
+    function registerFor(address agent, Role role) external {
+        if (msg.sender != owner && !isReporter[msg.sender]) revert NotReporter();
+        _register(agent, role);
+    }
+
+    function _register(address agent, Role role) internal {
+        if (agent == address(0)) revert ZeroAddress();
+        if (role == Role.None) revert InvalidRole();
+        if (_agents[agent].registered) revert AlreadyRegistered();
+        _agents[agent] = Agent({
+            registered: true,
+            role: role,
+            registeredAt: uint64(block.timestamp),
+            fills: 0,
+            volume: 0,
+            premiumsEarned: 0,
+            payoutsMade: 0,
+            settlements: 0,
+            defaults: 0
+        });
+        _agentList.push(agent);
+        emit AgentRegistered(agent, role);
+    }
+
+    // ---------------------------------------------------------------------
+    // Reputation reporting (reporters only)
+    // ---------------------------------------------------------------------
+
+    function recordFill(address agent, uint128 volume) external onlyReporter {
+        Agent storage a = _requireAgent(agent);
+        unchecked {
+            a.fills += 1;
+            a.volume += volume;
+        }
+        emit FillRecorded(agent, volume);
