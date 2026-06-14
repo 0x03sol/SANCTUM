@@ -74,3 +74,79 @@ contract SilentBidPool is ISequencingRights {
     error NotOwner();
     error NotMatcher();
     error NotBidder();
+    error ZeroAddress();
+    error BlobTooLarge();
+    error BadExpiry();
+    error BidNotOpen();
+    error BidIsExpired();
+    error BadReveal();
+    error NoClearingPrice();
+    error PriceNotMet();
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyMatcher() {
+        if (!isMatcher[msg.sender]) revert NotMatcher();
+        _;
+    }
+
+    constructor(AegisRegistry _aegis) {
+        owner = msg.sender;
+        aegis = _aegis;
+        emit OwnerTransferred(address(0), msg.sender);
+    }
+
+    // ---------------------------------------------------------------------
+    // Admin
+    // ---------------------------------------------------------------------
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnerTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    function setMatcher(address matcher, bool allowed) external onlyOwner {
+        if (matcher == address(0)) revert ZeroAddress();
+        isMatcher[matcher] = allowed;
+        emit MatcherSet(matcher, allowed);
+    }
+
+    /// @notice Post the clearing price for an asset. In production this is called by a
+    ///         scheduled consumer right after it fetches+parses the price via HTTP(0x0801)+JQ.
+    function postClearingPrice(bytes32 assetId, uint256 price) external onlyMatcher {
+        clearingPrice[assetId] = price;
+        emit ClearingPricePosted(assetId, price);
+    }
+
+    // ---------------------------------------------------------------------
+    // Bidding
+    // ---------------------------------------------------------------------
+
+    /// @notice Submit a sealed bid. `commitment = keccak256(abi.encode(maxPrice, salt))`.
+    ///         `encryptedBlob` is opaque (e.g. ECIES strategy/qty detail) and only size-checked.
+    function submitBid(
+        bytes32 assetId,
+        bytes32 commitment,
+        bytes calldata encryptedBlob,
+        uint128 quantity,
+        uint64 expiryBlock
+    ) external returns (uint256 bidId) {
+        if (encryptedBlob.length > MAX_BLOB) revert BlobTooLarge();
+        if (expiryBlock <= block.number) revert BadExpiry();
+
+        bidId = nextBidId++;
+        bids[bidId] = Bid({
+            bidder: msg.sender,
+            assetId: assetId,
+            commitment: commitment,
+            quantity: quantity,
+            expiryBlock: expiryBlock,
+            status: BidStatus.Open
+        });
+
+        // Auto-onboard the trader into Aegis (pool is an authorized reporter).
+        if (!aegis.isRegistered(msg.sender)) {
