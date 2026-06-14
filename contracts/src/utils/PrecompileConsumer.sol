@@ -40,3 +40,23 @@ abstract contract PrecompileConsumer {
         if (!ok) revert PrecompileCallFailed();
         // Envelope: (bytes simmedInput, bytes actualOutput)
         (, actualOutput) = abi.decode(raw, (bytes, bytes));
+    }
+
+    /// @notice Decode an HTTP precompile response.
+    /// @return statusCode HTTP status, body raw bytes, errorMessage precompile-level error.
+    function _decodeHttp(bytes memory actualOutput)
+        internal
+        pure
+        returns (uint16 statusCode, bytes memory body, string memory errorMessage)
+    {
+        (statusCode,,, body, errorMessage) =
+            abi.decode(actualOutput, (uint16, string[], string[], bytes, string));
+    }
+
+    /// @notice Fire-and-forget submit of a long-running async precompile (agents, long HTTP).
+    ///         Result arrives later via an onlyAsyncDelivery callback.
+    function _submitLongRunning(address precompile, bytes memory input) internal {
+        (bool ok,) = precompile.call(input);
+        if (!ok) revert PrecompileCallFailed();
+    }
+}
