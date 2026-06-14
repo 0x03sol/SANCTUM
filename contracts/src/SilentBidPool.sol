@@ -150,3 +150,78 @@ contract SilentBidPool is ISequencingRights {
 
         // Auto-onboard the trader into Aegis (pool is an authorized reporter).
         if (!aegis.isRegistered(msg.sender)) {
+            aegis.registerFor(msg.sender, AegisRegistry.Role.Trader);
+        }
+
+        emit BidSubmitted(bidId, msg.sender, assetId, quantity, expiryBlock);
+    }
+
+    /// @notice Cancel an open bid. HIGHEST sequencing priority (see sequencingRights):
+    ///         guaranteed to order before any reveal/fill in the same block.
+    function cancelBid(uint256 bidId) external {
+        Bid storage b = bids[bidId];
+        if (b.bidder != msg.sender) revert NotBidder();
+        if (b.status != BidStatus.Open) revert BidNotOpen();
+        b.status = BidStatus.Cancelled;
+        emit BidCancelled(bidId, msg.sender);
+    }
+
+    /// @notice Reveal a bid's sealed price and fill it if it clears. Lower sequencing priority
+    ///         than cancelBid. Anyone holding the (maxPrice, salt) may submit, but the fill only
+    ///         succeeds against the posted clearing price — and a same-block cancel wins.
+    function revealAndFill(uint256 bidId, uint256 maxPrice, bytes32 salt) external {
+        Bid storage b = bids[bidId];
+        if (b.status != BidStatus.Open) revert BidNotOpen();
+        if (block.number > b.expiryBlock) {
+            b.status = BidStatus.Expired;
+            emit BidExpired(bidId);
+            revert BidIsExpired();
+        }
+        if (keccak256(abi.encode(maxPrice, salt)) != b.commitment) revert BadReveal();
+
+        uint256 px = clearingPrice[b.assetId];
+        if (px == 0) revert NoClearingPrice();
+        if (maxPrice < px) revert PriceNotMet();
+
+        b.status = BidStatus.Filled;
+        aegis.recordFill(b.bidder, b.quantity);
+        emit BidFilled(bidId, b.bidder, b.assetId, maxPrice, px);
+    }
+
+    /// @notice Permissionless cleanup of an expired bid (frees status for indexers).
+    function expireBid(uint256 bidId) external {
+        Bid storage b = bids[bidId];
+        if (b.status != BidStatus.Open) revert BidNotOpen();
+        if (block.number <= b.expiryBlock) revert BadExpiry();
+        b.status = BidStatus.Expired;
+        emit BidExpired(bidId);
+    }
+
+    // ---------------------------------------------------------------------
+    // Sequencing Rights (single-contract ACE) — THE anti-front-run guarantee
+    // ---------------------------------------------------------------------
+
+    /// @notice Declares function execution priority to the block builder.
+    ///         Level 0 (cancelBid) is ordered before Level 1 (revealAndFill) within a block.
+    ///         A block violating this ordering is invalid at consensus.
+    function sequencingRights() external pure returns (bytes4[][] memory levels) {
+        levels = new bytes4[][](2);
+        levels[0] = new bytes4[](1);
+        levels[0][0] = this.cancelBid.selector;
+        levels[1] = new bytes4[](1);
+        levels[1][0] = this.revealAndFill.selector;
+    }
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    /// @notice Off-chain/SDK helper to compute the commitment for a sealed bid.
+    function computeCommitment(uint256 maxPrice, bytes32 salt) external pure returns (bytes32) {
+        return keccak256(abi.encode(maxPrice, salt));
+    }
+
+    function getBid(uint256 bidId) external view returns (Bid memory) {
+        return bids[bidId];
+    }
+}
