@@ -150,3 +150,78 @@ contract AegisRegistry {
             a.volume += volume;
         }
         emit FillRecorded(agent, volume);
+    }
+
+    function recordPremium(address agent, uint128 amount) external onlyReporter {
+        Agent storage a = _requireAgent(agent);
+        unchecked {
+            a.premiumsEarned += amount;
+        }
+        emit PremiumRecorded(agent, amount);
+    }
+
+    function recordPayout(address agent, uint128 amount) external onlyReporter {
+        Agent storage a = _requireAgent(agent);
+        unchecked {
+            a.payoutsMade += amount;
+            a.settlements += 1;
+        }
+        emit PayoutRecorded(agent, amount);
+        emit SettlementRecorded(agent);
+    }
+
+    function recordSettlement(address agent) external onlyReporter {
+        Agent storage a = _requireAgent(agent);
+        unchecked {
+            a.settlements += 1;
+        }
+        emit SettlementRecorded(agent);
+    }
+
+    function recordDefault(address agent) external onlyReporter {
+        Agent storage a = _requireAgent(agent);
+        unchecked {
+            a.defaults += 1;
+        }
+        emit DefaultRecorded(agent);
+    }
+
+    // ---------------------------------------------------------------------
+    // Views
+    // ---------------------------------------------------------------------
+
+    function reputationOf(address agent) external view returns (Agent memory) {
+        return _agents[agent];
+    }
+
+    function isRegistered(address agent) external view returns (bool) {
+        return _agents[agent].registered;
+    }
+
+    function agentCount() external view returns (uint256) {
+        return _agentList.length;
+    }
+
+    function agentAt(uint256 index) external view returns (address) {
+        return _agentList[index];
+    }
+
+    /// @notice Deterministic trust score. Starts at SCORE_BASE; rises with honored
+    ///         settlements and fills, falls hard with defaults. Floored at 0.
+    /// @dev    Simple, transparent, fully on-chain. Off-chain consumers can layer richer models.
+    function score(address agent) external view returns (uint256) {
+        Agent storage a = _agents[agent];
+        if (!a.registered) return 0;
+        uint256 s = SCORE_BASE;
+        s += uint256(a.settlements) * 50;
+        s += uint256(a.fills) * 5;
+        uint256 penalty = uint256(a.defaults) * 250;
+        if (penalty >= s) return 0;
+        return s - penalty;
+    }
+
+    function _requireAgent(address agent) internal view returns (Agent storage a) {
+        a = _agents[agent];
+        if (!a.registered) revert NotRegistered();
+    }
+}
