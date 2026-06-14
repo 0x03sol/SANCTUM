@@ -239,3 +239,123 @@ contract SentinelUnderwriter is PrecompileConsumer {
         (uint16 status, bytes memory body,) = _decodeHttp(out);
         require(status == 200, "http status");
 
+        // JQ: extract an integer price. outputType 1 = uint256.
+        (bool ok, bytes memory res) =
+            RitualAddresses.JQ.staticcall(abi.encode(jqFilter, string(body), uint8(1)));
+        require(ok && res.length > 0, "jq");
+        uint256 price = abi.decode(res, (uint256));
+        _recordPrice(price);
+    }
+
+    function _recordPrice(uint256 price) internal {
+        // maintain rolling window
+        if (_window.length < windowSize) {
+            _window.push(price);
+        } else {
+            // shift left by one (small windowSize keeps this cheap)
+            for (uint256 i = 0; i + 1 < _window.length; i++) {
+                _window[i] = _window[i + 1];
+            }
+            _window[_window.length - 1] = price;
+        }
+
+        // recompute window high
+        uint256 high = 0;
+        for (uint256 i = 0; i < _window.length; i++) {
+            if (_window[i] > high) high = _window[i];
+        }
+        windowHigh = high;
+        lastPrice = price;
+
+        uint256 dd = high == 0 ? 0 : ((high - price) * 10000) / high;
+        emit PriceRecorded(price, high, dd);
+
+        if (!triggered && dd >= triggerBps) {
+            triggered = true;
+            emit Triggered(high, price, dd);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Settlement (pays from pool; records reputation)
+    // ---------------------------------------------------------------------
+
+    /// @notice Pay all active policies once the drawdown trigger has fired. Idempotent: can only
+    ///         settle once. Re-checks the trigger (TOCTOU safety).
+    function settle() external {
+        if (!triggered) revert NotTriggered();
+        if (settled) revert AlreadySettled();
+        settled = true;
+
+        uint256 paidCount;
+        uint256 totalPaid;
+        uint256 n = policies.length;
+        for (uint256 i = 0; i < n; i++) {
+            Policy storage p = policies[i];
+            if (!p.active) continue;
+            p.active = false;
+            uint256 amount = p.payout;
+            if (amount > poolBalance) amount = poolBalance; // never pay more than the pool holds
+            poolBalance -= amount;
+            totalPaid += amount;
+            paidCount += 1;
+            (bool sent,) = payable(p.holder).call{value: amount}("");
+            if (!sent) revert TransferFailed();
+            emit PolicySettled(i, p.holder, uint128(amount));
+        }
+        totalCoverage = 0;
+
+        // Honoring claims is the underwriter agent's strongest reputation signal.
+        if (agentIdentity != address(0)) {
+            aegis.recordPayout(agentIdentity, uint128(totalPaid));
+        }
+        emit SettlementComplete(paidCount, totalPaid);
+    }
+
+    // ---------------------------------------------------------------------
+    // LLM settlement narrative (separate tx — never gates payout)
+    // ---------------------------------------------------------------------
+
+    /// @notice Generate + store a human-readable settlement report via the LLM precompile.
+    ///         Must be a SEPARATE transaction from any HTTP fetch (one async SPC per tx).
+    function postSettlementReport(bytes calldata llmInput) external onlyOwner {
+        bytes memory out = _executeSPC(RitualAddresses.LLM, llmInput);
+        // (bool hasError, bytes completionData, bytes modelMetadata, string errorMessage, ConvoRef)
+        (bool hasError, bytes memory completionData,, string memory errorMessage,) =
+            abi.decode(out, (bool, bytes, bytes, string, ConvoRef));
+        require(!hasError, errorMessage);
+        lastReport = string(completionData);
+        emit ReportPosted(lastReport);
+    }
+
+    /// @notice Owner can set a report directly (e.g. report assembled off-chain). Ops convenience.
+    function setReport(string calldata report) external onlyOwner {
+        lastReport = report;
+        emit ReportPosted(report);
+    }
+
+    // ---------------------------------------------------------------------
+    // Views
+    // ---------------------------------------------------------------------
+
+    function policyCount() external view returns (uint256) {
+        return policies.length;
+    }
+
+    function getPolicy(uint256 id) external view returns (Policy memory) {
+        return policies[id];
+    }
+
+    function windowLength() external view returns (uint256) {
+        return _window.length;
+    }
+
+    function currentDrawdownBps() external view returns (uint256) {
+        if (windowHigh == 0) return 0;
+        return ((windowHigh - lastPrice) * 10000) / windowHigh;
+    }
+
+    receive() external payable {
+        poolBalance += msg.value;
+    }
+}
