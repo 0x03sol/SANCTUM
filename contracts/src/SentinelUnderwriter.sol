@@ -119,3 +119,123 @@ contract SentinelUnderwriter is PrecompileConsumer {
         if (_windowSize == 0) revert BadConfig();
         owner = msg.sender;
         aegis = _aegis;
+        assetId = _assetId;
+        triggerBps = _triggerBps;
+        payoutMultiplierBps = _payoutMultiplierBps;
+        windowSize = _windowSize;
+        scheduler = RitualAddresses.SCHEDULER;
+        emit OwnerTransferred(address(0), msg.sender);
+    }
+
+    // ---------------------------------------------------------------------
+    // Admin
+    // ---------------------------------------------------------------------
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        emit OwnerTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+
+    function setOracle(address oracle, bool allowed) external onlyOwner {
+        if (oracle == address(0)) revert ZeroAddress();
+        isOracle[oracle] = allowed;
+        emit OracleSet(oracle, allowed);
+    }
+
+    function setScheduler(address _scheduler) external onlyOwner {
+        if (_scheduler == address(0)) revert ZeroAddress();
+        scheduler = _scheduler;
+        emit SchedulerSet(_scheduler);
+    }
+
+    /// @notice Bind the agent identity whose Aegis reputation accrues from this underwriter's
+    ///         settlements. Registered as an Underwriter if not already.
+    function setAgentIdentity(address agent) external onlyOwner {
+        if (agent == address(0)) revert ZeroAddress();
+        agentIdentity = agent;
+        if (!aegis.isRegistered(agent)) {
+            aegis.registerFor(agent, AegisRegistry.Role.Underwriter);
+        }
+        emit AgentIdentitySet(agent);
+    }
+
+    /// @notice Owner seeds the capital pool (premiums + seed back payouts).
+    function fundPool() external payable {
+        poolBalance += msg.value;
+    }
+
+    // ---------------------------------------------------------------------
+    // Policies
+    // ---------------------------------------------------------------------
+
+    /// @notice Buy parametric cover. Premium = msg.value; coverage = premium * multiplier.
+    ///         Pool must be solvent enough to back the new coverage.
+    function buyPolicy() external payable returns (uint256 policyId) {
+        if (msg.value == 0) revert NoPremium();
+        uint128 premium = uint128(msg.value);
+        uint128 payout = uint128((uint256(premium) * payoutMultiplierBps) / 10000);
+
+        // Solvency: premiums in pool must cover total outstanding coverage.
+        poolBalance += msg.value;
+        if (poolBalance < totalCoverage + payout) revert PoolCannotCover();
+        totalCoverage += payout;
+
+        policyId = policies.length;
+        policies.push(Policy({holder: msg.sender, premium: premium, payout: payout, boughtAt: uint64(block.number), active: true}));
+
+        // Premium counts toward the underwriter agent's earned-premium reputation.
+        if (agentIdentity != address(0)) {
+            aegis.recordPremium(agentIdentity, premium);
+        }
+        emit PolicyBought(policyId, msg.sender, premium, payout);
+    }
+
+    // ---------------------------------------------------------------------
+    // Price loop (deterministic trigger)
+    // ---------------------------------------------------------------------
+
+    /// @notice Push a price sample (oracle/test path). Production uses fetchAndRecordPrice().
+    function recordPrice(uint256 price) external onlyOracle {
+        _recordPrice(price);
+    }
+
+    /// @notice Scheduler wake: fetch price on-chain and record it. msg.sender is the Scheduler.
+    /// @param executor TEE executor (from TEEServiceRegistry); priceUrl REST endpoint; jqFilter
+    ///        extracts an integer price from the JSON body.
+    function wakeUp(uint256 /* executionIndex */, address executor, string calldata priceUrl, string calldata jqFilter)
+        external
+        onlyScheduler
+    {
+        _fetchAndRecordPrice(executor, priceUrl, jqFilter);
+    }
+
+    /// @notice Manual trigger of the fetch path (owner), for ops/testing on-chain.
+    function fetchAndRecordPrice(address executor, string calldata priceUrl, string calldata jqFilter)
+        external
+        onlyOwner
+    {
+        _fetchAndRecordPrice(executor, priceUrl, jqFilter);
+    }
+
+    /// @dev HTTP (0x0801, async SPC) + JQ (0x0803, sync) in one tx — allowed combination.
+    function _fetchAndRecordPrice(address executor, string memory priceUrl, string memory jqFilter) internal {
+        bytes memory httpInput = abi.encode(
+            executor,
+            new bytes[](0), // encryptedSecrets
+            uint256(30), // ttl
+            new bytes[](0), // secretSignatures
+            bytes(""), // userPublicKey
+            priceUrl,
+            uint8(1), // GET
+            new string[](0), // header keys
+            new string[](0), // header values
+            bytes(""), // body
+            uint256(0), // dkmsKeyIndex
+            uint8(0), // dkmsKeyFormat
+            false // piiEnabled
+        );
+        bytes memory out = _executeSPC(RitualAddresses.HTTP_CALL, httpInput);
+        (uint16 status, bytes memory body,) = _decodeHttp(out);
+        require(status == 200, "http status");
+
