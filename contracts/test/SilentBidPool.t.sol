@@ -57,3 +57,61 @@ contract SilentBidPoolTest is Test {
     function test_submit_revertsBadExpiry() public {
         vm.prank(alice);
         vm.expectRevert(SilentBidPool.BadExpiry.selector);
+        pool.submitBid(ASSET, _commit(1, SALT), "", 1, uint64(block.number));
+    }
+
+    function test_submit_revertsBlobTooLarge() public {
+        bytes memory big = new bytes(10_001);
+        vm.prank(alice);
+        vm.expectRevert(SilentBidPool.BlobTooLarge.selector);
+        pool.submitBid(ASSET, _commit(1, SALT), big, 1, uint64(block.number + 10));
+    }
+
+    // ---- cancel ----
+
+    function test_cancel_onlyBidder() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.prank(bob);
+        vm.expectRevert(SilentBidPool.NotBidder.selector);
+        pool.cancelBid(id);
+    }
+
+    function test_cancel_setsCancelled() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.prank(alice);
+        pool.cancelBid(id);
+        assertEq(uint8(pool.getBid(id).status), uint8(SilentBidPool.BidStatus.Cancelled));
+    }
+
+    function test_cancelledBid_cannotFill() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.prank(alice);
+        pool.cancelBid(id);
+        vm.prank(matcher);
+        pool.postClearingPrice(ASSET, 900);
+        vm.expectRevert(SilentBidPool.BidNotOpen.selector);
+        pool.revealAndFill(id, 1000, SALT);
+    }
+
+    // ---- clearing price + fill ----
+
+    function test_fill_succeedsWhenPriceMet() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.prank(matcher);
+        pool.postClearingPrice(ASSET, 900); // 1000 >= 900 => fills
+        pool.revealAndFill(id, 1000, SALT);
+        assertEq(uint8(pool.getBid(id).status), uint8(SilentBidPool.BidStatus.Filled));
+        // fill recorded in Aegis
+        assertEq(aegis.reputationOf(alice).fills, 1);
+        assertEq(aegis.reputationOf(alice).volume, 50);
+    }
+
+    function test_fill_revertsWhenPriceNotMet() public {
+        uint256 id = _submit(alice, 800, 50, uint64(block.number + 100));
+        vm.prank(matcher);
+        pool.postClearingPrice(ASSET, 900); // 800 < 900 => no fill
+        vm.expectRevert(SilentBidPool.PriceNotMet.selector);
+        pool.revealAndFill(id, 800, SALT);
+    }
+
+    function test_fill_revertsNoClearingPrice() public {
