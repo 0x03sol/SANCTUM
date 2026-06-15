@@ -14,3 +14,19 @@ contract Deploy is Script {
         address deployer = vm.addr(pk);
 
         // Underwriter config (overridable via env)
+        bytes32 assetId = keccak256("ETH");
+        uint16 triggerBps = uint16(vm.envOr("TRIGGER_BPS", uint256(3000))); // 30%
+        uint16 multBps = uint16(vm.envOr("PAYOUT_MULT_BPS", uint256(20000))); // 2x
+        uint8 windowSize = uint8(vm.envOr("WINDOW_SIZE", uint256(7)));
+
+        vm.startBroadcast(pk);
+
+        // 1. Reputation registry
+        AegisRegistry aegis = new AegisRegistry();
+
+        // 2. Dark pool
+        SilentBidPool pool = new SilentBidPool(aegis);
+
+        // 3. Underwriter
+        SentinelUnderwriter sentinel =
+            new SentinelUnderwriter(aegis, assetId, triggerBps, multBps, windowSize);
