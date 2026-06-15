@@ -116,3 +116,61 @@ contract AegisRegistryTest is Test {
         vm.prank(trader);
         aegis.register(AegisRegistry.Role.Trader);
         assertEq(aegis.score(trader), 1000);
+    }
+
+    function test_score_risesWithActivity() public {
+        vm.prank(underwriter);
+        aegis.register(AegisRegistry.Role.Underwriter);
+        vm.startPrank(reporter);
+        aegis.recordPayout(underwriter, 1); // +1 settlement => +50
+        aegis.recordFill(underwriter, 1); // +1 fill => +5
+        vm.stopPrank();
+        assertEq(aegis.score(underwriter), 1055);
+    }
+
+    function test_score_defaultsPenalize() public {
+        vm.prank(underwriter);
+        aegis.register(AegisRegistry.Role.Underwriter);
+        vm.startPrank(reporter);
+        aegis.recordDefault(underwriter); // -250
+        vm.stopPrank();
+        assertEq(aegis.score(underwriter), 750);
+    }
+
+    function test_score_flooredAtZero() public {
+        vm.prank(underwriter);
+        aegis.register(AegisRegistry.Role.Underwriter);
+        vm.startPrank(reporter);
+        for (uint256 i = 0; i < 10; i++) {
+            aegis.recordDefault(underwriter); // 10 * 250 = 2500 > 1000 base
+        }
+        vm.stopPrank();
+        assertEq(aegis.score(underwriter), 0);
+    }
+
+    // ---- ownership ----
+
+    function test_transferOwnership() public {
+        aegis.transferOwnership(stranger);
+        assertEq(aegis.owner(), stranger);
+    }
+
+    function test_transferOwnership_revertsZero() public {
+        vm.expectRevert(AegisRegistry.ZeroAddress.selector);
+        aegis.transferOwnership(address(0));
+    }
+
+    // ---- fuzz ----
+
+    function testFuzz_fillVolumeNeverReverts(uint128 v1, uint128 v2) public {
+        // keep within uint128 sum range to avoid intended overflow wrap in test expectations
+        vm.assume(uint256(v1) + uint256(v2) <= type(uint128).max);
+        vm.prank(trader);
+        aegis.register(AegisRegistry.Role.Trader);
+        vm.startPrank(reporter);
+        aegis.recordFill(trader, v1);
+        aegis.recordFill(trader, v2);
+        vm.stopPrank();
+        assertEq(aegis.reputationOf(trader).volume, uint128(uint256(v1) + uint256(v2)));
+    }
+}
