@@ -57,3 +57,62 @@ contract AegisRegistryTest is Test {
         aegis.registerFor(underwriter, AegisRegistry.Role.Underwriter);
     }
 
+    // ---- access control ----
+
+    function test_setReporter_onlyOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert(AegisRegistry.NotOwner.selector);
+        aegis.setReporter(stranger, true);
+    }
+
+    function test_record_onlyReporter() public {
+        vm.prank(trader);
+        aegis.register(AegisRegistry.Role.Trader);
+        vm.prank(stranger);
+        vm.expectRevert(AegisRegistry.NotReporter.selector);
+        aegis.recordFill(trader, 100);
+    }
+
+    function test_record_revertsUnregistered() public {
+        vm.prank(reporter);
+        vm.expectRevert(AegisRegistry.NotRegistered.selector);
+        aegis.recordFill(trader, 100);
+    }
+
+    // ---- reputation accrual ----
+
+    function test_fillsAndVolumeAccrue() public {
+        vm.prank(trader);
+        aegis.register(AegisRegistry.Role.Trader);
+        vm.startPrank(reporter);
+        aegis.recordFill(trader, 100);
+        aegis.recordFill(trader, 250);
+        vm.stopPrank();
+        AegisRegistry.Agent memory a = aegis.reputationOf(trader);
+        assertEq(a.fills, 2);
+        assertEq(a.volume, 350);
+    }
+
+    function test_premiumPayoutSettlement() public {
+        vm.prank(underwriter);
+        aegis.register(AegisRegistry.Role.Underwriter);
+        vm.startPrank(reporter);
+        aegis.recordPremium(underwriter, 500);
+        aegis.recordPayout(underwriter, 200); // also counts a settlement
+        vm.stopPrank();
+        AegisRegistry.Agent memory a = aegis.reputationOf(underwriter);
+        assertEq(a.premiumsEarned, 500);
+        assertEq(a.payoutsMade, 200);
+        assertEq(a.settlements, 1);
+    }
+
+    // ---- score ----
+
+    function test_score_unregisteredIsZero() public view {
+        assertEq(aegis.score(stranger), 0);
+    }
+
+    function test_score_baseline() public {
+        vm.prank(trader);
+        aegis.register(AegisRegistry.Role.Trader);
+        assertEq(aegis.score(trader), 1000);
