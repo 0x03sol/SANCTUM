@@ -30,3 +30,18 @@ contract Deploy is Script {
         // 3. Underwriter
         SentinelUnderwriter sentinel =
             new SentinelUnderwriter(aegis, assetId, triggerBps, multBps, windowSize);
+
+        // 4. Wiring (least-privilege)
+        aegis.setReporter(address(pool), true);
+        aegis.setReporter(address(sentinel), true);
+        pool.setMatcher(deployer, true); // deployer can post clearing prices for the demo
+        sentinel.setOracle(deployer, true); // deployer can push prices for the demo
+        sentinel.setAgentIdentity(deployer); // MVP: deployer acts as the underwriter agent id
+
+        vm.stopBroadcast();
+
+        console2.log("AEGIS_REGISTRY=%s", address(aegis));
+        console2.log("SILENTBID_POOL=%s", address(pool));
+        console2.log("SENTINEL_UNDERWRITER=%s", address(sentinel));
+    }
+}
