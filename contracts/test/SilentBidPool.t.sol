@@ -115,3 +115,61 @@ contract SilentBidPoolTest is Test {
     }
 
     function test_fill_revertsNoClearingPrice() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.expectRevert(SilentBidPool.NoClearingPrice.selector);
+        pool.revealAndFill(id, 1000, SALT);
+    }
+
+    function test_fill_revertsBadReveal() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.prank(matcher);
+        pool.postClearingPrice(ASSET, 900);
+        vm.expectRevert(SilentBidPool.BadReveal.selector);
+        pool.revealAndFill(id, 999 /* wrong price */, SALT);
+    }
+
+    // ---- expiry ----
+
+    function test_expire_afterExpiryBlock() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 10));
+        vm.roll(block.number + 11);
+        pool.expireBid(id);
+        assertEq(uint8(pool.getBid(id).status), uint8(SilentBidPool.BidStatus.Expired));
+    }
+
+    function test_fill_revertsAfterExpiry() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 10));
+        vm.prank(matcher);
+        pool.postClearingPrice(ASSET, 900);
+        vm.roll(block.number + 11);
+        vm.expectRevert(SilentBidPool.BidIsExpired.selector);
+        pool.revealAndFill(id, 1000, SALT);
+    }
+
+    // ---- the cancel-priority guarantee (single-contract ACE) ----
+
+    function test_sequencingRights_cancelBeforeFill() public view {
+        bytes4[][] memory levels = pool.sequencingRights();
+        assertEq(levels.length, 2);
+        assertEq(levels[0][0], SilentBidPool.cancelBid.selector); // level 0 = highest priority
+        assertEq(levels[1][0], SilentBidPool.revealAndFill.selector); // level 1 = lower
+    }
+
+    /// @notice Models the anti-front-run guarantee: even though a fill is submitted, a cancel in
+    ///         the same block is ordered first (level 0), so the fill then reverts (bid not open).
+    function test_cancelWins_overFill_sameBlock() public {
+        uint256 id = _submit(alice, 1000, 50, uint64(block.number + 100));
+        vm.prank(matcher);
+        pool.postClearingPrice(ASSET, 900);
+        // builder orders cancelBid (level 0) before revealAndFill (level 1):
+        vm.prank(alice);
+        pool.cancelBid(id);
+        vm.expectRevert(SilentBidPool.BidNotOpen.selector);
+        pool.revealAndFill(id, 1000, SALT);
+        assertEq(uint8(pool.getBid(id).status), uint8(SilentBidPool.BidStatus.Cancelled));
+    }
+
+    function test_computeCommitment_matches() public view {
+        assertEq(pool.computeCommitment(1234, SALT), _commit(1234, SALT));
+    }
+}
