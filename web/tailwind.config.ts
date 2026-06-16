@@ -15,3 +15,20 @@ const config: Config = {
         serif: ["'Playfair Display'", "'Times New Roman'", "serif"],
         body: ["'Lora'", "Georgia", "serif"],
         sans: ["'Inter'", "'Helvetica Neue'", "sans-serif"],
+        mono: ["'JetBrains Mono'", "'Courier New'", "monospace"],
+      },
+      borderRadius: {
+        none: "0px",
+        DEFAULT: "0px",
+        sm: "0px",
+        md: "0px",
+        lg: "0px",
+        xl: "0px",
+        full: "0px",
+      },
+      boxShadow: {
+        hard: "4px 4px 0px 0px #111111",
+        "hard-sm": "2px 2px 0px 0px #111111",
+        "hard-red": "4px 4px 0px 0px #CC0000",
+      },
+      maxWidth: {
