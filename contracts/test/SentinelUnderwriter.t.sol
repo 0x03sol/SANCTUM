@@ -130,3 +130,69 @@ contract SentinelUnderwriterTest is Test {
         id = sentinel.buyPolicy{value: 1 ether}(); // payout 2 ether
         _record(100);
         _record(100);
+        _record(60); // 40% drawdown => triggered
+    }
+
+    function test_settle_paysPolicyAndRecordsReputation() public {
+        uint256 id = _setupTriggeredWithPolicy();
+        uint256 before = alice.balance;
+        sentinel.settle();
+        assertEq(alice.balance, before + 2 ether);
+        assertFalse(sentinel.getPolicy(id).active);
+        // payout + settlement recorded for the agent
+        assertEq(aegis.reputationOf(agent).payoutsMade, 2 ether);
+        assertEq(aegis.reputationOf(agent).settlements, 1);
+    }
+
+    function test_settle_revertsNotTriggered() public {
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        sentinel.buyPolicy{value: 1 ether}();
+        vm.expectRevert(SentinelUnderwriter.NotTriggered.selector);
+        sentinel.settle();
+    }
+
+    function test_settle_idempotent() public {
+        _setupTriggeredWithPolicy();
+        sentinel.settle();
+        vm.expectRevert(SentinelUnderwriter.AlreadySettled.selector);
+        sentinel.settle();
+    }
+
+    // ---- scheduled HTTP+JQ fetch (mocked precompiles) ----
+
+    function _mockPrice(uint256 price, bytes memory bodyJson) internal {
+        bytes memory actualOutput =
+            abi.encode(uint16(200), new string[](0), new string[](0), bodyJson, string(""));
+        bytes memory envelope = abi.encode(bytes(""), actualOutput);
+        vm.mockCall(HTTP, bytes(""), envelope); // any call to HTTP precompile returns the envelope
+        vm.mockCall(JQ, bytes(""), abi.encode(price)); // JQ returns the integer price
+    }
+
+    function test_wakeUp_onlyScheduler() public {
+        vm.prank(alice);
+        vm.expectRevert(SentinelUnderwriter.NotScheduler.selector);
+        sentinel.wakeUp(0, address(0xE1), "https://api/price", ".price");
+    }
+
+    function test_fetchAndRecordPrice_viaMockedPrecompiles() public {
+        _mockPrice(72, bytes('{"price":72}'));
+        sentinel.fetchAndRecordPrice(address(0xE1), "https://api/price", ".price");
+        assertEq(sentinel.lastPrice(), 72);
+        assertEq(sentinel.windowLength(), 1);
+    }
+
+    function test_wakeUp_fromScheduler_recordsPrice() public {
+        _mockPrice(50, bytes('{"price":50}'));
+        vm.prank(scheduler);
+        sentinel.wakeUp(0, address(0xE1), "https://api/price", ".price");
+        assertEq(sentinel.lastPrice(), 50);
+    }
+
+    // ---- report ----
+
+    function test_setReport() public {
+        sentinel.setReport("Policy #0 settled: ETH fell 40%. Payout 2 RITUAL.");
+        assertEq(sentinel.lastReport(), "Policy #0 settled: ETH fell 40%. Payout 2 RITUAL.");
+    }
+}
