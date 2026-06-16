@@ -64,3 +64,69 @@ contract SentinelUnderwriterTest is Test {
     }
 
     // ---- policies ----
+
+    function test_buyPolicy_collectsPremiumAndCoverage() public {
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        uint256 id = sentinel.buyPolicy{value: 1 ether}();
+        SentinelUnderwriter.Policy memory p = sentinel.getPolicy(id);
+        assertEq(p.holder, alice);
+        assertEq(p.premium, 1 ether);
+        assertEq(p.payout, 2 ether); // 2x
+        assertTrue(p.active);
+        assertEq(sentinel.totalCoverage(), 2 ether);
+        // premium recorded in Aegis for the agent
+        assertEq(aegis.reputationOf(agent).premiumsEarned, 1 ether);
+    }
+
+    function test_buyPolicy_revertsNoPremium() public {
+        vm.prank(alice);
+        vm.expectRevert(SentinelUnderwriter.NoPremium.selector);
+        sentinel.buyPolicy{value: 0}();
+    }
+
+    function test_buyPolicy_revertsInsolvent() public {
+        // fresh underwriter with no pool seed
+        SentinelUnderwriter s2 = new SentinelUnderwriter(aegis, ASSET, TRIGGER_BPS, MULT_BPS, WINDOW);
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        vm.expectRevert(SentinelUnderwriter.PoolCannotCover.selector);
+        s2.buyPolicy{value: 1 ether}(); // pool=1 < coverage 2
+    }
+
+    // ---- price window + trigger ----
+
+    function test_recordPrice_onlyOracle() public {
+        vm.prank(alice);
+        vm.expectRevert(SentinelUnderwriter.NotOracle.selector);
+        sentinel.recordPrice(100);
+    }
+
+    function test_window_tracksHighAndDrawdown() public {
+        _record(100);
+        _record(110);
+        _record(90);
+        assertEq(sentinel.windowHigh(), 110);
+        assertEq(sentinel.lastPrice(), 90);
+        // dd = (110-90)/110 = 18.18% = 1818 bps
+        assertEq(sentinel.currentDrawdownBps(), 1818);
+        assertFalse(sentinel.triggered());
+    }
+
+    function test_trigger_firesOnDrawdown() public {
+        _record(100);
+        _record(100);
+        _record(100);
+        assertFalse(sentinel.triggered());
+        _record(65); // window [100,100,65], dd 35% >= 30%
+        assertTrue(sentinel.triggered());
+    }
+
+    // ---- settlement ----
+
+    function _setupTriggeredWithPolicy() internal returns (uint256 id) {
+        vm.deal(alice, 5 ether);
+        vm.prank(alice);
+        id = sentinel.buyPolicy{value: 1 ether}(); // payout 2 ether
+        _record(100);
+        _record(100);
