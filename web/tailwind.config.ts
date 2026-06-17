@@ -32,3 +32,19 @@ const config: Config = {
         "hard-red": "4px 4px 0px 0px #CC0000",
       },
       maxWidth: {
+        "screen-xl": "1280px",
+      },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+      },
+      animation: {
+        marquee: "marquee 40s linear infinite",
+      },
+    },
+  },
+  plugins: [],
+};
+export default config;
