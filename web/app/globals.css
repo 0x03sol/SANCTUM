@@ -72,3 +72,39 @@ p { text-wrap: pretty; }
     linear-gradient(90deg, transparent 98%, rgba(0, 0, 0, 0.02) 100%);
   background-size: 3px 3px;
   pointer-events: none;
+  opacity: 0.5;
+}
+
+/* hard offset "newspaper cutout" lift */
+.hard-shadow-hover {
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.hard-shadow-hover:hover {
+  box-shadow: 4px 4px 0px 0px #111111;
+  transform: translate(-2px, -2px);
+}
+
+/* drop cap for editorial intros */
+.drop-cap::first-letter {
+  font-family: "Playfair Display", serif;
+  font-weight: 900;
+  float: left;
+  font-size: 4.5rem;
+  line-height: 0.8;
+  padding: 0.1em 0.12em 0 0;
+  color: #111111;
+}
+
+/* thin terminal-free scrollbars in light theme */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #111111; }
+*::-webkit-scrollbar-track { background: #e5e5e0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
