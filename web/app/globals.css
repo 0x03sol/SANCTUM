@@ -1,0 +1,37 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Lora:ital,wght@0,400;0,600;1,400&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #f9f9f7;
+  --ink: #111111;
+}
+
+* {
+  border-radius: 0 !important;
+}
+
+html,
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: "Lora", Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+  /* 4x4 newsprint dot pattern */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23111111' fill-opacity='0.04' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E");
+}
+
+.font-serif { font-family: "Playfair Display", "Times New Roman", serif; }
+.font-body { font-family: "Lora", Georgia, serif; }
+.font-sans { font-family: "Inter", "Helvetica Neue", sans-serif; }
+.font-mono { font-family: "JetBrains Mono", "Courier New", monospace; }
+
+/* data tables / numeric mono should align on tabular figures */
+.font-mono { font-variant-numeric: tabular-nums; }
+.tabular { font-variant-numeric: tabular-nums; }
+
