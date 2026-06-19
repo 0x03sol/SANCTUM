@@ -12,3 +12,17 @@ function bigintSafeHash(queryKey: unknown): string {
     typeof v === "bigint" ? `${v}n` : v,
   );
 }
+
+export function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { queryKeyHashFn: bigintSafeHash } },
+      }),
+  );
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </WagmiProvider>
+  );
+}
