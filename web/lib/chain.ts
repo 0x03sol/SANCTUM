@@ -10,3 +10,15 @@ export const ritualChain = defineChain({
   name: "Ritual",
   nativeCurrency: { name: "RITUAL", symbol: "RITUAL", decimals: 18 },
   rpcUrls: { default: { http: [RPC_URL] } },
+  blockExplorers: {
+    default: { name: "Explorer", url: "https://explorer.ritualfoundation.org" },
+  },
+  testnet: true,
+});
+
+export const wagmiConfig = createConfig({
+  chains: [ritualChain],
+  connectors: [injected()],
+  transports: { [ritualChain.id]: http(RPC_URL) },
+  ssr: true,
+});
