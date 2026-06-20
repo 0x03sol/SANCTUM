@@ -94,3 +94,51 @@ export const sentinelAbi = [
   { type: "function", name: "windowHigh", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "lastPrice", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "currentDrawdownBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "triggered", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "settled", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "poolBalance", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "totalCoverage", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "policyCount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "lastReport", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "buyPolicy", stateMutability: "payable", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "settle", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  {
+    type: "function",
+    name: "getPolicy",
+    stateMutability: "view",
+    inputs: [{ type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "holder", type: "address" },
+          { name: "premium", type: "uint128" },
+          { name: "payout", type: "uint128" },
+          { name: "boughtAt", type: "uint64" },
+          { name: "active", type: "bool" },
+        ],
+      },
+    ],
+  },
+  { type: "event", name: "PolicyBought", inputs: [
+    { name: "policyId", type: "uint256", indexed: true },
+    { name: "holder", type: "address", indexed: true },
+    { name: "premium", type: "uint128", indexed: false },
+    { name: "payout", type: "uint128", indexed: false },
+  ] },
+  { type: "event", name: "PriceRecorded", inputs: [
+    { name: "price", type: "uint256", indexed: false },
+    { name: "windowHigh", type: "uint256", indexed: false },
+    { name: "drawdownBps", type: "uint256", indexed: false },
+  ] },
+  { type: "event", name: "Triggered", inputs: [
+    { name: "windowHigh", type: "uint256", indexed: false },
+    { name: "price", type: "uint256", indexed: false },
+    { name: "drawdownBps", type: "uint256", indexed: false },
+  ] },
+  { type: "event", name: "PolicySettled", inputs: [
+    { name: "policyId", type: "uint256", indexed: true },
+    { name: "holder", type: "address", indexed: true },
+    { name: "payout", type: "uint128", indexed: false },
+  ] },
+] as const;
