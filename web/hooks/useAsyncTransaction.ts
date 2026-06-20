@@ -82,3 +82,44 @@ export function useAsyncTransaction() {
     setState("IDLE");
     setHash(undefined);
     setError(undefined);
+  }, []);
+
+  const send = useCallback(
+    async (params: {
+      address: Address;
+      abi: Abi;
+      functionName: string;
+      args?: readonly unknown[];
+      value?: bigint;
+    }) => {
+      try {
+        setError(undefined);
+        setState("CONFIRMING");
+        const txHash = await writeContractAsync({
+          address: params.address,
+          abi: params.abi,
+          functionName: params.functionName,
+          args: params.args as never,
+          value: params.value,
+        });
+        setHash(txHash);
+        setState("SUBMITTED");
+        const receipt = await publicClient!.waitForTransactionReceipt({ hash: txHash });
+        if (receipt.status === "reverted") {
+          setState("ERROR");
+          setError("The transaction was mined but reverted on-chain.");
+          return { ok: false as const, hash: txHash };
+        }
+        setState("COMPLETED");
+        return { ok: true as const, hash: txHash };
+      } catch (e: unknown) {
+        setError(prettyError(e));
+        setState("ERROR");
+        return { ok: false as const };
+      }
+    },
+    [publicClient, writeContractAsync],
+  );
+
+  return { state, hash, error, send, reset };
+}
