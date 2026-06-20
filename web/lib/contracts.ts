@@ -10,3 +10,15 @@ export const CONTRACTS = {
 };
 
 export const ROLE_LABEL = ["—", "Trader", "Underwriter", "Reinsurer"] as const;
+
+export const BID_STATUS = ["None", "Open", "Cancelled", "Filled", "Expired"] as const;
+
+export function shortAddr(a?: string) {
+  if (!a) return "—";
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+export function bps(n?: bigint | number) {
+  if (n === undefined) return "—";
+  return `${(Number(n) / 100).toFixed(2)}%`;
+}
