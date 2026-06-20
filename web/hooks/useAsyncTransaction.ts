@@ -40,3 +40,45 @@ export const STATE_META: Record<
 const ERROR_MESSAGES: Record<string, string> = {
   NoPremium: "Enter a premium greater than 0 RITUAL.",
   PoolCannotCover: "The underwriter's pool can't back this coverage right now.",
+  PriceNotMet: "Your sealed max price is below the current clearing price, so it can't fill.",
+  NoClearingPrice: "No clearing price has been posted for this asset yet.",
+  BadReveal: "The reveal doesn't match your sealed bid (wrong price or salt).",
+  BidNotOpen: "This bid is no longer open.",
+  BidIsExpired: "This bid has expired.",
+  NotTriggered: "The drawdown trigger hasn't fired yet — nothing to settle.",
+  AlreadySettled: "This underwriter has already settled its claims.",
+  NotBidder: "Only the original bidder can do that.",
+  BadExpiry: "The expiry block must be in the future.",
+  BlobTooLarge: "The sealed payload is too large (max 10 KB).",
+};
+
+export function prettyError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e ?? "Unknown error");
+  // wallet rejection
+  if (/user rejected|user denied|rejected the request|4001/i.test(raw)) {
+    return "You rejected the transaction in your wallet.";
+  }
+  if (/insufficient funds/i.test(raw)) {
+    return "Not enough RITUAL to cover gas. Top up from the faucet.";
+  }
+  // known custom errors (viem includes the error name in the message)
+  for (const [name, friendly] of Object.entries(ERROR_MESSAGES)) {
+    if (raw.includes(name)) return friendly;
+  }
+  // viem often exposes a concise shortMessage
+  const anyE = e as { shortMessage?: string };
+  if (anyE?.shortMessage) return anyE.shortMessage.slice(0, 160);
+  return raw.split("\n")[0].slice(0, 160);
+}
+
+export function useAsyncTransaction() {
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+  const [state, setState] = useState<TxState>("IDLE");
+  const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [error, setError] = useState<string>();
+
+  const reset = useCallback(() => {
+    setState("IDLE");
+    setHash(undefined);
+    setError(undefined);
