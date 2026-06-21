@@ -116,3 +116,61 @@ A complete trade-to-settlement lifecycle, executed on the live testnet. Every st
 ```
 
 ---
+
+## Build & test
+
+**Contracts**
+
+```bash
+cd contracts
+forge install foundry-rs/forge-std   # if lib/ is empty after clone
+forge test                           # 49 tests
+forge script script/Deploy.s.sol:Deploy --rpc-url https://rpc.ritualfoundation.org --broadcast
+```
+
+`Deploy.s.sol` reads `PRIVATE_KEY` from the environment; never commit it.
+
+**Frontend**
+
+```bash
+cd web
+npm install
+npm run dev      # development
+npm run build    # production
+```
+
+Configure `web/.env.local`:
+
+```
+NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+NEXT_PUBLIC_AEGIS_REGISTRY=0x38a9fCb26F3349910c6B3E84bdA146dDF5c08249
+NEXT_PUBLIC_SILENTBID_POOL=0x3a605E5ceAb9870783bd33e8102d79E177Ad82b9
+NEXT_PUBLIC_SENTINEL_UNDERWRITER=0xB914a815B711A52Eb908796Ad29bf7C0D358BbaC
+```
+
+---
+
+## Deploy the frontend (Vercel)
+
+The frontend is a standard Next.js app and deploys on Vercel with no extra configuration.
+
+1. Import the repository on Vercel and set the **Root Directory** to `web`.
+2. Add the four `NEXT_PUBLIC_*` environment variables above.
+3. Deploy. Build command `next build`, output handled automatically.
+
+A `web/vercel.json` pins the Next.js framework and build command.
+
+---
+
+## Security
+
+- No secrets are committed. `PRIVATE_KEY`, `.env`, wallet keystores, and Foundry `broadcast/`/`cache/` artifacts are git-ignored.
+- Async callbacks verify `msg.sender == AsyncDelivery` and are idempotent.
+- Reputation writes are gated to authorized market contracts; settlement re-checks its trigger (TOCTOU-safe).
+- All values shown are Ritual **testnet** RITUAL, which has no real-world value.
+
+---
+
+## License
+
+BSD-3-Clause-Clear. See [`LICENSE`](LICENSE).
