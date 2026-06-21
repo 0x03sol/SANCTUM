@@ -215,3 +215,220 @@ function Hero({ poolBalance, drawdownBps, triggerBps, agentCount, policyCount, t
     <section className="newsprint-texture grid grid-cols-1 border-b border-ink lg:grid-cols-12">
       <div className="border-ink p-6 lg:col-span-8 lg:border-r lg:p-10">
         <Label className={triggered ? "text-editorial" : "text-neutral-500"}>{triggered ? "Breaking · Drawdown Trigger Active" : "Market Dispatch"}</Label>
+        <h2 className="mt-3 font-serif text-4xl font-black leading-[0.95] tracking-tight sm:text-5xl lg:text-6xl">
+          Machines that trade, insure, and answer for their record.
+        </h2>
+        <p className="drop-cap mt-6 max-w-[60ch] text-justify font-body text-[17px] leading-relaxed text-neutral-700">
+          Sanctum is a self-contained market where sovereign agents acquire tokenized real-world assets through a sealed-bid
+          dark pool, then underwrite parametric cover on those positions, autonomously, with no human at the desk. Every fill,
+          premium, and claim is bound to an agent's on-chain reputation. The result is a venue engineered for participants who
+          never sleep and never forget.
+        </p>
+        <div className="mt-7 flex flex-wrap gap-3">
+          <Btn tone="primary" onClick={() => document.getElementById("market")?.scrollIntoView({ behavior: "smooth" })}>Enter the Market</Btn>
+          <Btn tone="outline" onClick={() => document.getElementById("how")?.scrollIntoView({ behavior: "smooth" })}>How It Works</Btn>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:col-span-4 lg:grid-cols-1">
+        {[
+          { l: "Pool Capital", v: `${Number(formatEther(poolBalance)).toFixed(3)} R` },
+          { l: "Drawdown / Trigger", v: `${(Number(drawdownBps) / 100).toFixed(1)}% / ${(triggerBps / 100).toFixed(0)}%`, red: triggered },
+          { l: "Registered Agents", v: agentCount },
+          { l: "Status", v: settled ? "SETTLED" : triggered ? "TRIGGERED" : "MONITORING", red: triggered, pos: settled || !triggered },
+        ].map((s: any, i) => (
+          <div key={s.l} className={`flex flex-col justify-center gap-1 p-5 ${i < 3 ? "border-b border-ink" : ""} ${i % 2 === 0 ? "border-r border-ink lg:border-r-0" : ""}`}>
+            <Label className="text-neutral-500">{s.l}</Label>
+            <span className={`font-mono text-2xl font-medium tabular-nums ${s.red ? "text-editorial" : s.pos ? "text-positive" : "text-ink"}`}>{s.v}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* --------------------------- Section header --------------------------- */
+function SectionHead({ kicker, title, sub }: { kicker: string; title: string; sub: string }) {
+  return (
+    <div className="px-4 pt-12 lg:px-8">
+      <div className="border-b border-ink pb-2">
+        <Label className="text-neutral-500">{kicker}</Label>
+        <h3 className="mt-1 font-serif text-3xl font-black leading-none lg:text-4xl">{title}</h3>
+        <p className="mt-2 max-w-[70ch] font-body text-[16px] text-neutral-700">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+/* OVERDRIVE: live Canvas price tape — data drawn left→right as samples arrive */
+function PriceTape({ lastPrice, triggered }: { lastPrice: bigint; triggered: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const series = useRef<number[]>([]);
+
+  function draw() {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth || 300;
+    const h = cv.clientHeight || 64;
+    cv.width = Math.floor(w * dpr);
+    cv.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(17,17,17,0.15)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h - 1);
+    ctx.lineTo(w, h - 1);
+    ctx.stroke();
+    const s = series.current;
+    if (s.length < 2) {
+      ctx.fillStyle = "rgba(17,17,17,0.4)";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillText("awaiting price samples…", 6, h / 2);
+      return;
+    }
+    const min = Math.min(...s);
+    const max = Math.max(...s);
+    const range = max - min || 1;
+    const stepX = w / (s.length - 1);
+    const yOf = (v: number) => h - ((v - min) / range) * (h - 10) - 5;
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    s.forEach((v, i) => ctx.lineTo(i * stepX, yOf(v)));
+    ctx.lineTo((s.length - 1) * stepX, h);
+    ctx.closePath();
+    ctx.fillStyle = triggered ? "rgba(204,0,0,0.08)" : "rgba(17,17,17,0.06)";
+    ctx.fill();
+    ctx.beginPath();
+    s.forEach((v, i) => (i ? ctx.lineTo(i * stepX, yOf(v)) : ctx.moveTo(i * stepX, yOf(v))));
+    ctx.strokeStyle = triggered ? "#CC0000" : "#111111";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    const lx = (s.length - 1) * stepX;
+    const ly = yOf(s[s.length - 1]);
+    ctx.fillStyle = triggered ? "#CC0000" : "#15663F";
+    ctx.beginPath();
+    ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  useEffect(() => {
+    const v = Number(lastPrice);
+    if (v > 0) {
+      const s = series.current;
+      if (s.length === 0 || s[s.length - 1] !== v) {
+        s.push(v);
+        if (s.length > 80) s.shift();
+      }
+    }
+    draw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastPrice, triggered]);
+
+  useEffect(() => {
+    const onResize = () => draw();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return <canvas ref={canvasRef} className="h-16 w-full" role="img" aria-label="Live price tape" />;
+}
+
+/* -------------------------- Underwriter desk -------------------------- */
+function UnderwriterDesk(p: any) {
+  const tx = useAsyncTransaction();
+  const [premium, setPremium] = useState("0.01");
+  const ddPct = Number(p.drawdownBps) / 100;
+  const trigPct = p.triggerBps / 100;
+  const gauge = Math.min(100, (ddPct / Math.max(1, trigPct)) * 100);
+
+  const premiumNum = Number(premium);
+  const premiumValid = premium.trim() !== "" && Number.isFinite(premiumNum) && premiumNum > 0;
+
+  async function buy() {
+    if (!premiumValid) return;
+    const r = await tx.send({ address: CONTRACTS.sentinel, abi: sentinelAbi as any, functionName: "buyPolicy", value: parseEther(premium || "0") });
+    if (r.ok) p.onFeed({ kind: "POLICY", text: `You bought cover · premium ${premium} R` });
+  }
+  async function settle() {
+    const r = await tx.send({ address: CONTRACTS.sentinel, abi: sentinelAbi as any, functionName: "settle" });
+    if (r.ok) p.onFeed({ kind: "SETTLED", text: "Settlement executed" });
+  }
+
+  return (
+    <div className={`${p.className ?? ""}`}>
+      <Card title="Sentinel Underwriter" kicker="Autonomous Desk" right={<Badge tone="ink">Agent ◇</Badge>} className="border-0">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+          <Stat label="Pool" value={`${Number(formatEther(p.poolBalance)).toFixed(3)} R`} />
+          <Stat label="Liability" value={`${Number(formatEther(p.totalCoverage)).toFixed(3)} R`} />
+          <Stat label="Policies" value={p.policyCount} />
+          <Stat label="Last Price" value={p.lastPrice.toString()} />
+          <Stat label="Window High" value={p.windowHigh.toString()} />
+          <Stat label="Payout" value={`${(p.multBps / 10000).toFixed(1)}×`} />
+        </div>
+
+        <div className="mt-6">
+          <div className="mb-1 flex items-center justify-between">
+            <Label className="text-neutral-500">Price tape · drawdown {ddPct.toFixed(2)}% / trigger {trigPct.toFixed(0)}%</Label>
+            <Label className={p.triggered ? "text-editorial" : "text-positive"}>{p.triggered ? "Triggered" : "Armed"}</Label>
+          </div>
+          <div className="border border-ink bg-paper px-1">
+            <PriceTape lastPrice={p.lastPrice} triggered={p.triggered} />
+          </div>
+          <div className="mt-1.5 h-2 w-full border border-ink bg-paper" role="progressbar" aria-valuenow={Math.round(gauge)} aria-valuemax={100} aria-label="Drawdown toward trigger">
+            <div className={`h-full ${p.triggered ? "bg-editorial" : "bg-ink"}`} style={{ width: `${gauge}%` }} />
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-dashed border-ink pt-5">
+          <label className="flex flex-col gap-1">
+            <Label className="text-neutral-500">Premium (R)</Label>
+            <Input value={premium} onChange={(e) => setPremium(e.target.value)} className="w-28" inputMode="decimal" aria-invalid={!premiumValid} aria-describedby="premium-hint" />
+          </label>
+          <Btn tone="primary" disabled={!p.isConnected || !premiumValid} onClick={buy}>Buy Cover</Btn>
+          <Btn tone="positive" disabled={!p.isConnected || !p.triggered || p.settled} onClick={settle}>Settle Claims</Btn>
+          <StatusPill state={tx.state} />
+        </div>
+        {!premiumValid && premium.trim() !== "" && (
+          <p id="premium-hint" className="mt-2 font-mono text-[11px] text-editorial">Enter a premium greater than 0.</p>
+        )}
+        {tx.error && <p className="mt-2 font-mono text-[11px] text-editorial">✗ {tx.error}</p>}
+      </Card>
+    </div>
+  );
+}
+
+/* ------------------------------ Dark pool ------------------------------ */
+function DarkPool(p: any) {
+  const tx = useAsyncTransaction();
+  const [maxPrice, setMaxPrice] = useState("3500");
+  const [qty, setQty] = useState("10");
+
+  const priceValid = /^\d+$/.test(maxPrice) && BigInt(maxPrice || "0") > 0n;
+  const qtyValid = /^\d+$/.test(qty) && BigInt(qty || "0") > 0n;
+  const sealValid = priceValid && qtyValid;
+
+  async function submit() {
+    if (!p.assetId || !p.block || !sealValid) return;
+    const salt = randomSalt();
+    const c = commit(BigInt(maxPrice || "0"), salt);
+    const r = await tx.send({ address: CONTRACTS.pool, abi: poolAbi as any, functionName: "submitBid", args: [p.assetId, c, "0x", BigInt(qty || "0"), p.block + 5000n] });
+    if (r.ok) {
+      const key = `sanctum:bids:${p.address}`;
+      const prev = JSON.parse(localStorage.getItem(key) || "[]");
+      prev.push({ maxPrice, salt });
+      localStorage.setItem(key, JSON.stringify(prev));
+      p.onFeed({ kind: "SEALED BID", text: `You sealed a bid · qty ${qty} (price hidden)` });
+    }
+  }
+  async function cancel(id: number) {
+    const r = await tx.send({ address: CONTRACTS.pool, abi: poolAbi as any, functionName: "cancelBid", args: [BigInt(id)] });
+    if (r.ok) p.onFeed({ kind: "CANCEL", text: `You pulled bid #${id}` });
+  }
+  async function reveal(id: number, idx: number) {
+    const key = `sanctum:bids:${p.address}`;
+    const rec = JSON.parse(localStorage.getItem(key) || "[]")[idx];
+    if (!rec) return p.onFeed({ kind: "ERROR", text: `No local salt for bid #${id}`, red: true });
