@@ -134,3 +134,71 @@ export function Ornament() {
 }
 
 /* 9-state async tx status, newsprint-styled */
+export function StatusPill({ state }: { state: TxState }) {
+  if (state === "IDLE") return null;
+  const labels: Record<TxState, string> = {
+    IDLE: "Idle",
+    CONFIRMING: "Confirm in wallet",
+    SUBMITTED: "Submitted",
+    COMMITTED: "Committed",
+    EXECUTING: "Executing · TEE",
+    SETTLING: "Settling",
+    SETTLED: "Result ready",
+    COMPLETED: "Filed ✓",
+    ERROR: "Failed ✗",
+  };
+  const isErr = state === "ERROR";
+  const isDone = state === "COMPLETED";
+  return (
+    <span
+      role="status"
+      aria-label={`Status: ${labels[state]}`}
+      className={`inline-flex items-center gap-2 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.15em] ${
+        isErr ? "border-editorial text-editorial" : isDone ? "bg-positive text-paper border-positive" : "border-ink text-ink"
+      }`}
+    >
+      <span className={`h-2 w-2 ${isErr ? "bg-editorial" : isDone ? "bg-positive" : "bg-ink"} ${!isErr && !isDone ? "animate-pulse" : ""}`} />
+      {labels[state]}
+    </span>
+  );
+}
+
+/* black breaking-news ticker — seamless, gap-free fill */
+export function Marquee({ items }: { items: string[] }) {
+  const base = items.length
+    ? items.join("  ◆  ")
+    : "Awaiting market activity. Connect a wallet to participate.";
+  const unit = `${base}  ◆  `;
+  // repeat enough that one track always exceeds the viewport (no empty gap)
+  const track = unit.repeat(items.length > 6 ? 2 : 6);
+  return (
+    <div aria-hidden className="overflow-hidden border-y border-ink bg-ink py-2 text-paper">
+      <div className="flex w-max animate-marquee">
+        <span className="shrink-0 font-mono text-xs uppercase tracking-[0.18em]">{track}</span>
+        <span aria-hidden className="shrink-0 font-mono text-xs uppercase tracking-[0.18em]">{track}</span>
+      </div>
+    </div>
+  );
+}
+
+/* FAQ accordion item — rotating + icon, grid-rows animation */
+export function Accordion({ q, children }: { q: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-ink">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex min-h-[44px] w-full items-center justify-between gap-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+      >
+        <span className="font-serif text-lg font-bold lg:text-xl">{q}</span>
+        <span className={`font-mono text-2xl leading-none transition-transform duration-200 ${open ? "rotate-45 text-editorial" : "text-ink"}`}>+</span>
+      </button>
+      <div className={`grid transition-all duration-300 ease-in-out ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="overflow-hidden">
+          <div className="max-w-[68ch] pb-5 font-body text-[16px] leading-relaxed text-neutral-700">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
