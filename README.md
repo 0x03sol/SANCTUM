@@ -67,6 +67,9 @@ A complete trade-to-settlement lifecycle, executed on the live testnet. Every st
 | Reveal & fill bid | [`0x22f2499d…3a06206`](https://explorer.ritualfoundation.org/tx/0x22f2499dc46ffb3fd6e2627ccbe585f4c3d60feb0f0e9612eab83c8b38a06206) |
 | Settle claim | [`0xa250d2c9…f9f59e6b`](https://explorer.ritualfoundation.org/tx/0xa250d2c9d4531b36f76a88f1ba5af3db659925ebcc3e8fceeacdf8e2f9f59e6b) |
 | File settlement report | [`0x97fe12ed…d0f81c4`](https://explorer.ritualfoundation.org/tx/0x97fe12ed3a980be13bc28193630c70e0ce775650b643e1d5750d0f6cad0f81c4) |
+| **Live HTTP + JQ price fetch (precompile)** | [`0xf63e66f4…349516a`](https://explorer.ritualfoundation.org/tx/0xf63e66f42327713fe560b441ff4f7127fa1d99054645625cb60afa2f2349516a) |
+
+The last transaction is the headline: the `SentinelUnderwriter` called Ritual's HTTP precompile (`0x0801`) to fetch the live ETH/USD price from CoinGecko, parsed it with the JQ precompile (`0x0803`), and wrote it to contract state — entirely on-chain, in one transaction, with no oracle and no keeper.
 
 ### Live metrics (read directly from the contracts)
 
