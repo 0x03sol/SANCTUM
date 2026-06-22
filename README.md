@@ -68,8 +68,9 @@ A complete trade-to-settlement lifecycle, executed on the live testnet. Every st
 | Settle claim | [`0xa250d2c9…f9f59e6b`](https://explorer.ritualfoundation.org/tx/0xa250d2c9d4531b36f76a88f1ba5af3db659925ebcc3e8fceeacdf8e2f9f59e6b) |
 | File settlement report | [`0x97fe12ed…d0f81c4`](https://explorer.ritualfoundation.org/tx/0x97fe12ed3a980be13bc28193630c70e0ce775650b643e1d5750d0f6cad0f81c4) |
 | **Live HTTP + JQ price fetch (precompile)** | [`0xf63e66f4…349516a`](https://explorer.ritualfoundation.org/tx/0xf63e66f42327713fe560b441ff4f7127fa1d99054645625cb60afa2f2349516a) |
+| **Live LLM settlement inference (precompile)** | [`0x51b2d52c…410e8b0`](https://explorer.ritualfoundation.org/tx/0x51b2d52c66598668483b34e3adaa8e1cbc0fab70ab092d5b633031c4c410e8b0) |
 
-The last transaction is the headline: the `SentinelUnderwriter` called Ritual's HTTP precompile (`0x0801`) to fetch the live ETH/USD price from CoinGecko, parsed it with the JQ precompile (`0x0803`), and wrote it to contract state — entirely on-chain, in one transaction, with no oracle and no keeper.
+The last two transactions are the headline. In one the `SentinelUnderwriter` called Ritual's HTTP precompile (`0x0801`) to fetch the live ETH/USD price from CoinGecko, parsed it with the JQ precompile (`0x0803`), and wrote it to state. In the other it called the LLM precompile (`0x0802`) to run a GLM-4.7 inference inside the TEE for the settlement narrative. Both ran entirely on-chain, in one transaction each, with no oracle and no keeper.
 
 ### Live metrics (read directly from the contracts)
 
