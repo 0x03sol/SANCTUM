@@ -72,6 +72,8 @@ A complete trade-to-settlement lifecycle, executed on the live testnet. Every st
 
 The last two transactions are the headline. In one the `SentinelUnderwriter` called Ritual's HTTP precompile (`0x0801`) to fetch the live ETH/USD price from CoinGecko, parsed it with the JQ precompile (`0x0803`), and wrote it to state. In the other it called the LLM precompile (`0x0802`) to run a GLM-4.7 inference inside the TEE for the settlement narrative. Both ran entirely on-chain, in one transaction each, with no oracle and no keeper.
 
+The LLM call persists its conversation history to a HuggingFace dataset as the agent's data-availability layer: [`lopkwqugre231/sanctum-convos`](https://huggingface.co/datasets/lopkwqugre231/sanctum-convos).
+
 ### Live metrics (read directly from the contracts)
 
 | Metric | Value |
